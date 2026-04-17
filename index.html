@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>2048: CyberGrid Evolution</title>
+    <title>2048: CyberGrid Evolution (Admin Edition)</title>
     <style>
         :root {
             --bg-dark: #050509;
@@ -23,12 +23,32 @@
             overflow: hidden; color: var(--text-main);
         }
 
+        .admin-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 5px 10px;
+            font-size: 12px;
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid var(--border-glow);
+            color: var(--border-glow);
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+        .admin-btn:hover {
+            background: var(--border-glow);
+            color: var(--bg-dark);
+            box-shadow: 0 0 10px var(--border-glow);
+        }
+
         .header { width: 340px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px; }
         h1 { margin: 0; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px var(--border-glow); color: #fff; }
+        
         .score-container { background: rgba(0, 0, 0, 0.5); padding: 5px 15px; border: 1px solid var(--grid-line); border-radius: 4px; text-align: center; }
         #score { font-size: 20px; font-weight: bold; color: var(--border-glow); }
 
-        /* 道具栏样式 */
         .item-bar {
             display: flex; gap: 10px; width: 340px; justify-content: center;
             height: 0; opacity: 0; margin-bottom: 0;
@@ -37,7 +57,7 @@
         .item-bar.visible { height: 65px; opacity: 1; margin-bottom: 15px; }
 
         .item-slot {
-            display: none; /* 初始隐藏 */
+            display: none;
             flex: 1; background: rgba(0, 0, 0, 0.6); border: 1px dashed var(--item-color);
             padding: 5px; border-radius: 4px; text-align: center; cursor: pointer;
             transition: all 0.2s; align-items: center; justify-content: center;
@@ -48,7 +68,6 @@
         .item-name { font-size: 9px; color: var(--item-color); text-transform: uppercase; }
         .item-count { font-size: 12px; font-weight: bold; color: #fff; }
 
-        /* 游戏主体 */
         #game-container {
             position: relative; width: 340px; height: 340px;
             background-color: rgba(26, 26, 46, 0.4); border: 2px solid #1a1a2e;
@@ -57,25 +76,21 @@
         .grid { display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 10px; width: 100%; height: 100%; }
         .cell { width: 72.5px; height: 72.5px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--grid-line); border-radius: 4px; }
 
-        /* 数字块 - 修复跳动关键 */
         .tile {
             position: absolute; width: 72.5px; height: 72.5px; border-radius: 4px;
             display: flex; justify-content: center; align-items: center;
             font-size: 28px; font-weight: bold; z-index: 10; color: #fff;
-            /* 修复：只对必要属性进行过渡 */
             transition: top 0.12s ease-in-out, left 0.12s ease-in-out, transform 0.1s ease-out;
             box-shadow: inset 0 2px 3px rgba(255,255,255,0.3), 0 4px 0 rgba(0,0,0,0.5);
             will-change: top, left;
         }
 
-        /* 道具模式下的目标反馈 */
         .tile.selectable { cursor: pointer; animation: target-glow 0.8s infinite alternate; z-index: 20; }
         @keyframes target-glow {
             from { box-shadow: 0 0 5px #fff; transform: scale(1); }
             to { box-shadow: 0 0 20px var(--item-color); transform: scale(1.05); }
         }
 
-        /* 道具公告层 */
         .announcement-layer {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); z-index: 200;
@@ -96,7 +111,6 @@
             100% { transform: translateY(-300px) scale(0); opacity: 0; }
         }
 
-        /* 数字颜色定义 */
         .n-2 { background: #444; } .n-4 { background: #009efd; }
         .n-8 { background: #f77062; } .n-16 { background: #b721ff; }
         .n-32 { background: #fa709a; } .n-64 { background: #ff0844; }
@@ -105,6 +119,7 @@
         .n-512 { background: #ff00de; font-size: 24px; box-shadow: 0 0 20px rgba(255,0,222,0.6); }
         .n-1024 { background: #00fff2; color: #333; font-size: 20px; }
         .n-2048 { background: #f00; font-size: 20px; animation: pulse 1s infinite alternate; }
+
         @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.02); } }
 
         #over-mask {
@@ -120,6 +135,8 @@
     </style>
 </head>
 <body>
+
+    <button class="admin-btn" id="admin-trigger" onclick="game.adminMode()">ADMIN</button>
 
     <div class="header">
         <h1>2048</h1>
@@ -176,6 +193,7 @@
             items: { hammer: 0, swap: 0, merge: 0 },
             discovered: { hammer: false, swap: false, merge: false },
             activeItem: null, selectedIndices: [],
+            isAdmin: false, 
             container: document.getElementById('game-container'),
             mask: document.getElementById('over-mask'),
             tileWidth: 72.5, gap: 10,
@@ -186,9 +204,31 @@
                 this.items = { hammer: 0, swap: 0, merge: 0 };
                 this.discovered = { hammer: false, swap: false, merge: false };
                 this.activeItem = null; this.selectedIndices = [];
+                this.isAdmin = false; 
                 this.mask.style.display = 'none';
+                document.getElementById('admin-trigger').innerText = 'ADMIN';
                 this.renderBg(); this.addTile(); this.addTile();
                 this.updateItemUI(); this.draw();
+            },
+
+            adminMode() {
+                if (this.isAdmin) {
+                    this.isAdmin = false;
+                    document.getElementById('admin-trigger').innerText = 'ADMIN';
+                    alert("管理者模式已退出。");
+                    this.updateItemUI();
+                    return;
+                }
+
+                const password = prompt("请输入管理者秘钥：");
+                if (password === "admin888") {
+                    this.isAdmin = true;
+                    document.getElementById('admin-trigger').innerText = 'ADMIN (ON)';
+                    alert("权限已确认。维度修改器已上线。");
+                    this.updateItemUI();
+                } else {
+                    alert("权限不足，拒绝访问。");
+                }
             },
 
             renderBg() {
@@ -205,9 +245,11 @@
                 let anyDiscovered = false;
                 for (let type in this.items) {
                     const slot = document.getElementById(`item-${type}`);
-                    document.getElementById(`count-${type}`).innerText = this.items[type];
+                    document.getElementById(`count-${type}`).innerText = this.isAdmin ? '∞' : this.items[type];
+                    
                     slot.classList.toggle('active', this.activeItem === type);
-                    if (this.discovered[type]) {
+                    
+                    if (this.discovered[type] || this.isAdmin) {
                         slot.classList.add('discovered');
                         anyDiscovered = true;
                     } else {
@@ -218,6 +260,7 @@
             },
 
             showItemReward(type) {
+                if(this.isAdmin) return; 
                 const layer = document.getElementById('item-announcement');
                 const content = layer.querySelector('.announcement-content');
                 document.getElementById('announced-img').src = itemAssets[type].img;
@@ -267,7 +310,7 @@
             },
 
             useItem(type) {
-                if (this.items[type] <= 0) return;
+                if (!this.isAdmin && this.items[type] <= 0) return;
                 this.activeItem = (this.activeItem === type) ? null : type;
                 this.selectedIndices = [];
                 this.updateItemUI(); this.draw();
@@ -289,7 +332,7 @@
                                 this.board[i2] *= 2; this.board[i1] = 0;
                                 this.score += this.board[i2]; this.finalizeItem();
                             } else {
-                                this.selectedIndices = []; alert("数值不同，无法合并！");
+                                this.selectedIndices = []; alert("我就知道有小人！！！，数字不同不让合");
                             }
                         }
                     }
@@ -297,8 +340,18 @@
             },
 
             finalizeItem() {
-                this.items[this.activeItem]--; this.activeItem = null;
-                this.selectedIndices = []; this.updateItemUI(); this.draw();
+                if (!this.isAdmin) {
+                    this.items[this.activeItem]--;
+                }
+                this.activeItem = null;
+                this.selectedIndices = []; 
+                this.updateItemUI(); 
+                this.draw();
+                
+                // 使用完道具后，再次检查是否游戏结束
+                if (this.isGameOver()) {
+                    this.mask.style.display = 'flex';
+                }
             },
 
             checkItemGain() {
@@ -335,17 +388,30 @@
                 }));
                 if (JSON.stringify(nb) !== prev) {
                     this.board = nb; this.checkItemGain(); this.addTile(); this.draw();
+                    // 移动完成后检查游戏结束
                     if (this.isGameOver()) this.mask.style.display = 'flex';
                 }
             },
 
             isGameOver() {
+                // 1. 检查棋盘是否还有空位
                 if (this.board.includes(0)) return false;
+                
+                // 2. 检查棋盘是否有可合并的相邻方块
                 for (let i = 0; i < 16; i++) {
                     if (i % 4 !== 3 && this.board[i] === this.board[i+1]) return false;
                     if (i < 12 && this.board[i] === this.board[i+4]) return false;
                 }
-                return true;
+                
+                // 3. 关键改动：如果棋盘动不了，检查是否有道具可用
+                // 管理员模式永远不结束，或者普通模式下任意道具数量 > 0
+                const hasItems = this.isAdmin || Object.values(this.items).some(count => count > 0);
+                
+                if (hasItems) {
+                    return false; // 虽然棋盘动不了，但有道具，不结束
+                }
+
+                return true; // 既动不了也没道具了，游戏结束
             }
         };
 
