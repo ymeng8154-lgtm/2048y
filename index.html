@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>2048: CyberGrid Evolution (Admin Edition)</title>
+    <title>2048: 船新版本</title>
     <style>
         :root {
             --bg-dark: #050509;
@@ -129,10 +129,8 @@
 </head>
 <body>
 
-    <button class="admin-btn" id="admin-trigger" onclick="game.adminMode()">ADMIN</button>
-
     <div class="header">
-        <h1>2048</h1>
+        <h1 onclick="game.adminMode()">2048</h1>
         <div class="score-container" id="score-box" onclick="game.adminEditScore()">
             <span id="score">0</span>
         </div>
@@ -160,7 +158,7 @@
         <div class="grid" id="grid-bg"></div>
         <div id="over-mask">
             <h2 style="color:#ff0844">菜就多练！</h2>
-			<img src="/2048y/img/菜就多练.jpg" alt="" />
+			<img src="img/菜就多练.jpg" alt="" />
             <button class="btn" onclick="game.init()">不服！再战</button>
         </div>
     </div>
