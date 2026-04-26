@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>🐍 贪吃蛇 · 全球竞技版</title>
+  <title>🐍 贪吃蛇 · 全球实时竞技版</title>
   
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
+    // FIXME: 替换为你自己的 Firebase 配置
     const firebaseConfig = {
       apiKey: "AIzaSyCWsI-pxmzZpT3lsBauAizFiUuKdxF1MYA",
       authDomain: "harmony-game-ab90f.firebaseapp.com",
@@ -22,7 +23,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    // 挂载到全局方便游戏逻辑调用
+    // 挂载到全局方便游戏脚本调用
     window.fbHelper = { db, collection, addDoc, query, orderBy, limit, onSnapshot, serverTimestamp };
   </script>
 
@@ -44,61 +45,76 @@
       flex-direction: column;
       align-items: center;
       min-height: 100vh;
-      font-family: system-ui, sans-serif;
+      font-family: 'Segoe UI', sans-serif;
       padding: 10px;
       color: var(--text);
+      overflow-x: hidden;
     }
 
-    .game-wrapper { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; }
-    
-    .game-header {
-      display: flex; justify-content: space-between; padding: 10px 15px;
-      background: var(--panel-bg); border: 1px solid var(--btn-border); border-radius: 14px;
+    /* 侧边实时排行榜 - 悬浮在左上角 */
+    #liveLeaderboard {
+      position: fixed;
+      left: 15px;
+      top: 15px;
+      width: 160px;
+      background: var(--panel-bg);
+      border: 1px solid var(--btn-border);
+      border-radius: 12px;
+      padding: 12px;
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
 
-    .canvas-container { 
-        position: relative; width: 100%; aspect-ratio: 1/1; 
-        background: #111827; border-radius: 16px; overflow: hidden; 
+    #liveLeaderboard h3 {
+      font-size: 0.8rem;
+      color: var(--gold);
+      text-align: center;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
     }
-    canvas { width: 100%; height: 100%; display: block; }
 
-    /* 排行榜样式 */
-    #leaderboard {
-      background: var(--panel-bg); border: 1px solid var(--btn-border);
-      border-radius: 14px; padding: 15px; margin-top: 5px;
-    }
-    .score-row {
-      display: flex; justify-content: space-between; padding: 6px 0;
+    .rank-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      padding: 4px 0;
       border-bottom: 1px solid rgba(255,255,255,0.05);
     }
+    .rank-item:last-child { border: none; }
+    .rank-name { max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ccc; }
+    .rank-score { color: var(--accent); font-weight: bold; }
 
-    .dpad-container {
-      display: grid; grid-template-columns: repeat(3, 70px); grid-template-rows: repeat(3, 70px);
-      gap: 8px; justify-content: center; margin-top: 10px;
-    }
-    .dpad-btn {
-      background: rgba(30, 30, 50, 0.8); border: 2px solid var(--btn-border);
-      border-radius: 12px; color: white; font-size: 1.5rem; display: flex;
-      align-items: center; justify-content: center; cursor: pointer;
+    /* 原有游戏样式保持 */
+    .game-wrapper { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 10px; margin-top: 40px; }
+    .game-header { display: flex; justify-content: space-between; padding: 10px 15px; background: var(--panel-bg); border: 1px solid var(--btn-border); border-radius: 14px; }
+    .canvas-container { position: relative; width: 100%; aspect-ratio: 1/1; background: #111827; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    canvas { width: 100%; height: 100%; display: block; }
+    .dpad-container { display: grid; grid-template-columns: repeat(3, 75px); gap: 8px; justify-content: center; margin-top: 10px; }
+    .dpad-btn { background: rgba(30, 30, 50, 0.8); border: 2px solid var(--btn-border); border-radius: 15px; color: white; font-size: 1.8rem; height: 75px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    
+    @media (max-width: 800px) {
+        #liveLeaderboard { position: static; width: 100%; max-width: 600px; margin-bottom: 10px; order: -1; }
+        .game-wrapper { margin-top: 0; }
     }
   </style>
 </head>
 <body>
 
+  <div id="liveLeaderboard">
+    <h3>🏆 实时排行</h3>
+    <div id="rankList">加载中...</div>
+  </div>
+
   <div class="game-wrapper">
     <div class="game-header">
-      <div id="scoreDisplay" style="color: var(--accent); font-weight: bold;">🍎 0</div>
-      <div id="powerupHint" style="color: var(--gold); display: none;"></div>
-      <div>速度: <span id="speedLevel">1</span></div>
+      <div id="scoreDisplay" style="color: var(--accent); font-weight: bold; font-size: 1.2rem;">🍎 0</div>
+      <div style="font-size: 0.9rem;">速度: <span id="speedLevel">1</span></div>
     </div>
 
     <div class="canvas-container" id="canvasContainer">
       <canvas id="gameCanvas"></canvas>
-    </div>
-
-    <div id="leaderboard">
-      <h3 style="text-align: center; color: var(--gold); margin-bottom: 8px; font-size: 1rem;">🏆 全球排行榜 (实时)</h3>
-      <div id="scoreList" style="font-size: 0.85rem; color: #bbb;">正在连接战场...</div>
     </div>
 
     <div class="dpad-container">
@@ -111,21 +127,20 @@
 
   <script>
     (function() {
+      // --- 游戏基础设置 ---
       const canvas = document.getElementById('gameCanvas');
       const ctx = canvas.getContext('2d');
       const scoreDisplay = document.getElementById('scoreDisplay');
-      
       const COLS = 30, ROWS = 30, CELL = 20;
       canvas.width = COLS * CELL; canvas.height = ROWS * CELL;
 
       let snake = [], direction = {row:0, col:1}, food = null, score = 0;
-      let gameState = 'IDLE'; // IDLE, PLAYING, GAMEOVER
-      let lastTime = 0, interval = 150;
+      let gameState = 'IDLE', lastTime = 0, interval = 150;
 
       function initGame() {
         snake = [{row:15, col:10}, {row:15, col:11}, {row:15, col:12}];
         direction = {row:0, col:1};
-        score = 0;
+        score = 0; scoreDisplay.textContent = `🍎 ${score}`;
         spawnFood();
         gameState = 'PLAYING';
       }
@@ -139,7 +154,6 @@
         const head = snake[snake.length-1];
         const newHead = { row: head.row + direction.row, col: head.col + direction.col };
 
-        // 碰撞检测
         if (newHead.row < 0 || newHead.row >= ROWS || newHead.col < 0 || newHead.col >= COLS || 
             snake.some(s => s.row === newHead.row && s.col === newHead.col)) {
           endGame();
@@ -157,75 +171,73 @@
       }
 
       function draw() {
-        ctx.fillStyle = '#111827';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // 画食物
-        ctx.fillStyle = '#e74c3c';
-        ctx.beginPath();
-        ctx.arc(food.col*CELL + CELL/2, food.row*CELL + CELL/2, CELL/2 - 2, 0, Math.PI*2);
-        ctx.fill();
-
-        // 画蛇
+        ctx.fillStyle = '#111827'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 食物
+        ctx.fillStyle = '#e74c3c'; ctx.beginPath();
+        ctx.arc(food.col*CELL+10, food.row*CELL+10, 8, 0, Math.PI*2); ctx.fill();
+        // 蛇
         snake.forEach((s, i) => {
           ctx.fillStyle = i === snake.length-1 ? '#4ecb71' : '#2e7d32';
           ctx.fillRect(s.col*CELL+1, s.row*CELL+1, CELL-2, CELL-2);
         });
-
-        if (gameState === 'IDLE') {
-            ctx.fillStyle = 'white'; ctx.textAlign = 'center';
-            ctx.fillText('点击方向键开始游戏', canvas.width/2, canvas.height/2);
-        }
       }
 
       function gameLoop(time) {
-        if (time - lastTime > interval) {
-          update();
-          draw();
-          lastTime = time;
-        }
+        if (time - lastTime > interval) { update(); draw(); lastTime = time; }
         requestAnimationFrame(gameLoop);
       }
 
-      // 结束游戏并上传分数
+      // --- 2. Firebase 核心逻辑：提交分数 ---
       async function endGame() {
         gameState = 'GAMEOVER';
-        alert('游戏结束！得分：' + score);
+        const finalScore = score;
         
-        if (score > 0) {
-          const name = prompt("进入英雄榜！请输入你的名字：", "匿名玩家");
-          if (name && window.fbHelper) {
-            const { db, collection, addDoc, serverTimestamp } = window.fbHelper;
-            try {
-              await addDoc(collection(db, "scores"), {
-                name: name,
-                score: score,
-                timestamp: serverTimestamp()
-              });
-            } catch (e) { console.error("提交失败", e); }
-          }
+        if (finalScore > 0) {
+          // 延迟一点点弹出，避免阻塞渲染
+          setTimeout(async () => {
+            const name = prompt(`游戏结束！得分：${finalScore}\n请输入昵称展示在左侧榜单：`, "匿名特工");
+            if (name && window.fbHelper) {
+              const { db, collection, addDoc, serverTimestamp } = window.fbHelper;
+              try {
+                await addDoc(collection(db, "scores"), {
+                  name: name.substring(0, 8), // 限制长度
+                  score: finalScore,
+                  createdAt: serverTimestamp()
+                });
+              } catch (e) { console.error("Firebase 提交失败:", e); }
+            }
+            initGame();
+          }, 100);
+        } else {
+          initGame();
         }
-        initGame();
       }
 
-      // 排行榜实时同步
-      function setupLeaderboard() {
-        if (!window.fbHelper) { setTimeout(setupLeaderboard, 500); return; }
+      // --- 3. Firebase 核心逻辑：实时榜单同步 ---
+      function setupRealtimeLeaderboard() {
+        if (!window.fbHelper) {
+          setTimeout(setupRealtimeLeaderboard, 500);
+          return;
+        }
         const { db, collection, query, orderBy, limit, onSnapshot } = window.fbHelper;
-        const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(5));
+        const q = query(collection(db, "scores"), orderBy("score", "desc"), limit(10));
 
         onSnapshot(q, (snapshot) => {
-          const listEl = document.getElementById('scoreList');
+          const rankList = document.getElementById('rankList');
           let html = '';
           snapshot.forEach(doc => {
-            const d = doc.data();
-            html += `<div class="score-row"><span>${d.name || '匿名'}</span><b>${d.score}</b></div>`;
+            const data = doc.data();
+            html += `
+              <div class="rank-item">
+                <span class="rank-name">${data.name || '匿名'}</span>
+                <span class="rank-score">${data.score}</span>
+              </div>`;
           });
-          listEl.innerHTML = html || '暂无数据';
+          rankList.innerHTML = html || '暂无数据';
         });
       }
 
-      // 输入控制
+      // 控制与启动
       window.handleInput = (dir) => {
         if (gameState !== 'PLAYING') initGame();
         if (dir === 'up' && direction.row === 0) direction = {row:-1, col:0};
@@ -234,7 +246,7 @@
         if (dir === 'right' && direction.col === 0) direction = {row:0, col:1};
       };
 
-      setupLeaderboard();
+      setupRealtimeLeaderboard();
       requestAnimationFrame(gameLoop);
     })();
   </script>
